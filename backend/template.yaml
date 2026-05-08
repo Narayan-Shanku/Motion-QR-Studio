@@ -1,0 +1,158 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Motion QR Studio backend.
+  Ephemeral file/text sharing with QR codes. S3 lifecycle + DynamoDB TTL enforce expiry.
+
+Parameters:
+  AppName:
+    Type: String
+    Default: motion-qr-studio
+    Description: Stack-wide name prefix
+  CorsOrigin:
+    Type: String
+    Default: "*"
+    Description: Allowed Origin for the API and S3 CORS. Lock this down to your domain after deploy.
+  MaxFileSizeMB:
+    Type: Number
+    Default: 25
+    Description: Maximum allowed upload size in MB. Enforced server-side.
+  HardDeleteDays:
+    Type: Number
+    Default: 8
+    Description: S3 lifecycle hard-deletes any upload after this many days, regardless of TTL.
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Timeout: 10
+    MemorySize: 256
+    Architectures: [arm64]
+    Environment:
+      Variables:
+        UPLOADS_BUCKET: !Ref UploadsBucket
+        METADATA_TABLE: !Ref MetadataTable
+        CORS_ORIGIN: !Ref CorsOrigin
+        MAX_SIZE_BYTES: !Sub "${MaxFileSizeMB}000000"
+
+Resources:
+
+  # ──────────────────────────────────────────────
+  # Storage: S3 bucket for the actual file bytes
+  # ──────────────────────────────────────────────
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AppName}-uploads-${AWS::AccountId}-${AWS::Region}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: HardDeleteExpiredUploads
+            Status: Enabled
+            Prefix: uploads/
+            ExpirationInDays: !Ref HardDeleteDays
+          - Id: CleanupIncompleteMultipart
+            Status: Enabled
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 1
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods: [PUT, GET, HEAD]
+            AllowedOrigins: [!Ref CorsOrigin]
+            AllowedHeaders: ["*"]
+            ExposedHeaders: [ETag]
+            MaxAge: 3600
+
+  # ──────────────────────────────────────────────
+  # Metadata: DynamoDB with TTL for expiry
+  # ──────────────────────────────────────────────
+  MetadataTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AppName}-metadata"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+
+  # ──────────────────────────────────────────────
+  # API: HTTP API (cheaper + simpler than REST)
+  # ──────────────────────────────────────────────
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      CorsConfiguration:
+        AllowMethods: [GET, POST, OPTIONS]
+        AllowHeaders: ["content-type"]
+        AllowOrigins: [!Ref CorsOrigin]
+        MaxAge: 3600
+    
+
+  # ──────────────────────────────────────────────
+  # Lambda: create upload (returns presigned PUT URL)
+  # ──────────────────────────────────────────────
+  CreateUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-create-upload"
+      CodeUri: src/
+      Handler: createUpload.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MetadataTable
+        - S3WritePolicy:
+            BucketName: !Ref UploadsBucket
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: POST
+            Path: /uploads
+
+  # ──────────────────────────────────────────────
+  # Lambda: get upload (returns presigned GET URL if not expired)
+  # ──────────────────────────────────────────────
+  GetUploadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AppName}-get-upload"
+      CodeUri: src/
+      Handler: getUpload.handler
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref MetadataTable
+        - S3ReadPolicy:
+            BucketName: !Ref UploadsBucket
+      Events:
+        ApiEvent:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /uploads/{id}
+
+Outputs:
+  ApiUrl:
+    Description: Base URL for the HTTP API. Paste into frontend/config.js
+    Value: !Sub "https://${HttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+  UploadsBucketName:
+    Description: S3 bucket holding the uploaded files
+    Value: !Ref UploadsBucket
+  MetadataTableName:
+    Description: DynamoDB table holding upload metadata
+    Value: !Ref MetadataTable

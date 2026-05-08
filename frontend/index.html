@@ -1,0 +1,1153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Motion QR Studio</title>
+  <meta name="theme-color" content="#0d0f14" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      /* 🌙 NYC Night — "Midnight Editorial"
+         Refined neon punctuation against deep blue-black.
+         Inspired by: Linear dark, Arc browser, Empire State at 2am */
+      --bg:#0B0B14;
+      --bg-2:#16161F;
+      --bg-elev:rgba(255,255,255,.04);
+      --bg-elev-2:rgba(255,255,255,.02);
+      --ink:#F8F8FC;
+      --muted:#9CA3AF;
+      --accent:#22D3EE;       /* refined cyan */
+      --accent-2:#F472B6;     /* soft magenta */
+      --accent-3:#34D399;     /* emerald mint */
+      --danger:#F87171;
+      --line:rgba(255,255,255,.08);
+      --line-strong:rgba(255,255,255,.14);
+      --shadow:0 20px 60px rgba(0,0,0,.5);
+      --radius:18px;
+      --sans:"Space Grotesk", system-ui, sans-serif;
+      --mono:"JetBrains Mono", "SF Mono", monospace;
+      /* Atmospheric gradient overlays */
+      --grad-1:rgba(34,211,238,.14);   /* cyan haze */
+      --grad-2:rgba(244,114,182,.10);  /* magenta drift */
+      --grad-3:rgba(52,211,153,.06);   /* mint whisper */
+      /* Conic ring around QR */
+      --ring-1:rgba(34,211,238,.3);
+      --ring-2:rgba(244,114,182,.25);
+      --ring-3:rgba(52,211,153,.20);
+      /* Halo behind QR */
+      --halo-1:rgba(34,211,238,.45);
+      --halo-2:rgba(244,114,182,.4);
+      --halo-3:rgba(52,211,153,.35);
+    }
+    [data-theme="light"]{
+      /* ☀️ California Beach — "Coastal Editorial"
+         Warm neutral cream + earth tones + Pacific deep teal.
+         Inspired by: Aman Pacific, Aesop, Cuyana, Big Sur sunrise */
+      --bg:#FAF6EE;             /* warm oat-milk cream */
+      --bg-2:#FFFFFF;           /* clean surface */
+      --bg-elev:rgba(31,26,21,.04);
+      --bg-elev-2:rgba(31,26,21,.02);
+      --ink:#1F1A15;            /* warm dark, not black */
+      --muted:#7A6F62;          /* warm taupe */
+      --accent:#0F766E;         /* deep coastal teal — ocean at depth */
+      --accent-2:#E07856;       /* sunbaked terracotta */
+      --accent-3:#D4A574;       /* warm honey sand */
+      --danger:#B91C1C;
+      --line:rgba(31,26,21,.08);
+      --line-strong:rgba(31,26,21,.14);
+      --shadow:0 12px 40px rgba(31,26,21,.06), 0 4px 12px rgba(31,26,21,.04);
+      /* Atmospheric gradient overlays — soft sunrise haze */
+      --grad-1:rgba(15,118,110,.08);    /* teal mist */
+      --grad-2:rgba(224,120,86,.08);    /* terra glow */
+      --grad-3:rgba(212,165,116,.10);   /* golden haze */
+      /* Conic ring around QR */
+      --ring-1:rgba(15,118,110,.20);
+      --ring-2:rgba(224,120,86,.18);
+      --ring-3:rgba(212,165,116,.18);
+      /* Halo behind QR */
+      --halo-1:rgba(15,118,110,.30);
+      --halo-2:rgba(224,120,86,.25);
+      --halo-3:rgba(212,165,116,.25);
+    }
+    *{ box-sizing:border-box; }
+    body{
+      margin:0; font-family:var(--sans); color:var(--ink);
+      background:
+        radial-gradient(900px 500px at 10% 0%, var(--grad-1), transparent 60%),
+        radial-gradient(700px 500px at 90% 10%, var(--grad-2), transparent 55%),
+        radial-gradient(700px 500px at 60% 90%, var(--grad-3), transparent 55%),
+        var(--bg);
+      min-height:100vh; padding:28px 16px 50px; overflow-x:hidden;
+      transition: background 0.4s ease, color 0.3s ease;
+    }
+    .wrap{ max-width:1180px; margin:0 auto; }
+
+    header{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:18px; flex-wrap:wrap; }
+    h1{ font-size:28px; margin:0; letter-spacing:.2px; }
+    .subtitle{ color:var(--muted); font-size:13px; margin-top:6px; line-height:1.4; max-width:640px; }
+
+    .panel{
+      background:linear-gradient(180deg, var(--bg-elev), var(--bg-elev-2));
+      border:1px solid var(--line); box-shadow:var(--shadow); border-radius:var(--radius);
+      overflow:hidden; position:relative;
+    }
+    .panel::after{
+      content:""; position:absolute; inset:-2px;
+      background:conic-gradient(from 0deg, var(--ring-1), var(--ring-2), var(--ring-3), var(--ring-1));
+      filter:blur(40px); opacity:.35; animation:swirl 18s linear infinite; z-index:-1;
+    }
+    @keyframes swirl{ to{ transform:rotate(360deg); } }
+
+    .tabs{ display:flex; gap:8px; padding:12px; border-bottom:1px solid var(--line); background:var(--bg-elev); overflow:auto; }
+    .tab{
+      flex:0 0 auto; padding:10px 14px; border-radius:12px;
+      border:1px solid var(--line); background:var(--bg-elev);
+      font-weight:700; font-size:13px; color:var(--muted); cursor:pointer; user-select:none;
+      transition:transform .15s ease, background .15s ease, border-color .15s ease, color .15s ease;
+      display:flex; align-items:center; gap:8px;
+    }
+    .tab:hover{ transform:translateY(-1px); color:var(--ink); }
+    .tab[data-active="true"]{
+      color:var(--ink); background:var(--halo-1); border-color:var(--accent);
+      box-shadow:0 6px 20px var(--halo-1);
+    }
+
+    .content{ padding:18px; }
+    .grid{ display:grid; grid-template-columns:1.1fr .9fr; gap:16px; }
+    @media (max-width:920px){ .grid{ grid-template-columns:1fr; } header{ flex-direction:column; } }
+
+    .card{
+      background:var(--bg-2); border:1px solid var(--line); border-radius:var(--radius);
+      padding:16px; position:relative; overflow:hidden;
+    }
+    .label{ color:var(--muted); font-size:12px; letter-spacing:.3px; text-transform:uppercase; margin-bottom:8px; }
+
+    textarea, input[type="text"], input[type="number"], input[type="email"], input[type="tel"], input[type="url"], select{
+      width:100%; border-radius:14px; border:1px solid var(--line-strong);
+      background:var(--bg-elev); padding:12px 14px;
+      font-family:var(--sans); font-size:14px; color:var(--ink); outline:none;
+      transition:border-color .15s ease, box-shadow .15s ease, transform .2s ease;
+    }
+    textarea{ min-height:120px; resize:vertical; }
+    textarea:focus, input:focus, select:focus{
+      border-color:var(--accent); box-shadow:0 0 0 3px var(--halo-1); transform:translateY(-1px);
+    }
+    select{ appearance:none; background-image:linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-position:calc(100% - 18px) 18px, calc(100% - 13px) 18px; background-size:5px 5px; background-repeat:no-repeat; padding-right:36px; }
+
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+    .field{ margin-bottom:10px; }
+    .field-label{ display:block; color:var(--muted); font-size:12px; margin-bottom:4px; letter-spacing:.3px; }
+
+    button{
+      appearance:none; border:none; cursor:pointer; color:var(--ink);
+      background:var(--bg-elev); border:1px solid var(--line-strong);
+      padding:10px 14px; border-radius:12px; font-family:var(--sans); font-weight:600; font-size:13px;
+      transition:transform .08s ease, background .15s ease, border-color .15s ease, box-shadow .2s ease;
+      display:inline-flex; gap:8px; align-items:center; position:relative; overflow:hidden;
+    }
+    button:hover{ background:var(--halo-1); border-color:var(--accent); }
+    button:active{ transform:translateY(1px); }
+    button:disabled{ opacity:.4; cursor:not-allowed; }
+    .btn-primary{
+      background:linear-gradient(135deg, var(--accent), var(--accent-2));
+      border-color:var(--accent); color:var(--bg);
+      font-weight:700;
+    }
+    .btn-primary:hover{ box-shadow:0 12px 28px var(--halo-1); transform:translateY(-1px); }
+
+    .dropzone{
+      border:1.5px dashed var(--line-strong); border-radius:16px; padding:22px;
+      background:var(--bg-elev); text-align:center; color:var(--muted); font-size:13px;
+      transition:border-color .15s ease, background .15s ease, transform .2s ease, color .15s ease; cursor:pointer;
+    }
+    .dropzone:hover{ border-color:var(--accent); color:var(--ink); }
+    .dropzone[data-active="true"]{
+      border-color:var(--accent); background:var(--halo-1); color:var(--ink); transform:scale(1.01);
+    }
+
+    .pill{
+      font-size:12px; color:var(--ink); background:var(--bg-elev);
+      border:1px solid var(--line-strong); padding:5px 10px; border-radius:999px;
+      font-family:var(--mono); display:inline-flex; align-items:center; gap:6px;
+    }
+    .pill[data-tone="ok"]{ border-color:var(--accent-3); color:var(--accent-3); }
+    .pill[data-tone="warn"]{ border-color:var(--accent-2); color:var(--accent-2); }
+    .pill[data-tone="err"]{ border-color:var(--danger); color:var(--danger); }
+
+    .ttl-row{ display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+    .ttl-chip{
+      padding:6px 10px; border-radius:999px; border:1px solid var(--line-strong);
+      background:var(--bg-elev); font-size:12px; cursor:pointer; font-family:var(--mono);
+      color:var(--muted); transition:all .15s ease;
+    }
+    .ttl-chip:hover{ color:var(--ink); border-color:var(--accent); }
+    .ttl-chip[data-active="true"]{ background:var(--halo-1); border-color:var(--accent); color:var(--ink); }
+
+    /* Preview */
+    .preview{ display:flex; flex-direction:column; align-items:center; gap:14px; }
+    .qr-shell{
+      position:relative; width:340px; height:340px; display:grid; place-items:center;
+      border-radius:24px; background:var(--bg-elev); border:1px solid var(--line); overflow:hidden;
+    }
+    .qr-shell::before{
+      content:""; position:absolute; inset:-40%;
+      background:conic-gradient(from 0deg, var(--halo-1), var(--halo-2), var(--halo-3), var(--halo-1));
+      animation:spin 10s linear infinite; opacity:.5;
+    }
+    @keyframes spin{ to{ transform:rotate(360deg); } }
+    #qr-target{
+      width:300px; height:300px; background:#fff; border-radius:14px;
+      border:1px solid var(--line); position:relative; z-index:1;
+      display:grid; place-items:center; padding:8px;
+    }
+    #qr-target.empty::before{
+      content:"Awaiting input"; color:var(--muted); font-family:var(--mono); font-size:12px;
+    }
+    .scanline{
+      position:absolute; width:100%; height:3px; top:0; z-index:2;
+      background:linear-gradient(90deg, transparent, var(--accent), transparent);
+      animation:scan 2.6s ease-in-out infinite; mix-blend-mode:screen;
+    }
+    @keyframes scan{
+      0%{ transform:translateY(0); opacity:.3; }
+      50%{ opacity:.7; }
+      100%{ transform:translateY(340px); opacity:.2; }
+    }
+    .scan-safe .scanline{ display:none; }
+    .scan-safe .qr-shell::before{ animation:none; opacity:.12; }
+    .scan-safe .panel::after{ animation:none; opacity:.12; }
+
+    .meta{
+      font-family:var(--mono); font-size:12px; color:var(--muted); text-align:center;
+      max-width:300px; word-break:break-all;
+    }
+    .countdown{
+      font-family:var(--mono); font-size:14px; color:var(--accent); letter-spacing:.5px;
+      padding:6px 12px; border-radius:999px; border:1px solid var(--accent);
+      background:var(--halo-1);
+    }
+    .countdown[data-state="expired"]{ color:var(--danger); border-color:var(--danger); background:transparent; }
+    .countdown[data-state="soon"]{ color:var(--accent-2); border-color:var(--accent-2); background:var(--halo-2); }
+
+    .toolbar{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+
+    /* Style accordion */
+    .style-card details{ border-radius:12px; background:var(--bg-elev); border:1px solid var(--line); padding:8px 12px; }
+    .style-card summary{ cursor:pointer; font-size:13px; color:var(--muted); padding:6px 0; user-select:none; }
+    .style-card summary:hover{ color:var(--ink); }
+    .style-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; }
+    .style-grid label{
+      display:flex; align-items:center; justify-content:center;
+      padding:10px 8px; border-radius:10px; border:1px solid var(--line);
+      background:var(--bg-elev); cursor:pointer; font-size:11px; text-align:center;
+      transition:all .15s ease; color:var(--muted);
+    }
+    .style-grid label:hover{ background:var(--bg-elev-2); color:var(--ink); }
+    .style-grid input[type="radio"]{ display:none; }
+    .style-grid input[type="radio"]:checked + span{ color:var(--ink); font-weight:600; }
+    .style-grid label:has(input:checked){
+      border-color:var(--accent); background:var(--halo-1); box-shadow:0 4px 12px var(--halo-1);
+      color:var(--ink);
+    }
+    .swatches{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+    .swatch{ width:32px; height:32px; border-radius:8px; cursor:pointer; border:2px solid transparent; transition:all .15s ease; }
+    .swatch[data-active="true"]{ border-color:var(--ink); transform:scale(1.1); }
+
+    .status{ font-size:12px; color:var(--muted); margin-top:8px; min-height:16px; }
+    .status[data-tone="err"]{ color:var(--danger); }
+    .status[data-tone="ok"]{ color:var(--accent-3); }
+
+    .progress{ height:4px; border-radius:999px; background:var(--bg-elev); overflow:hidden; margin-top:8px; }
+    .progress-bar{ height:100%; background:linear-gradient(90deg, var(--accent), var(--accent-2)); width:0%; transition:width .2s ease; }
+
+    .hint{ color:var(--muted); font-size:12px; line-height:1.4; }
+
+    #scan-region{ width:100%; max-width:320px; aspect-ratio:1; border-radius:14px; overflow:hidden; background:#000; }
+    #scan-region video{ width:100%; height:100%; object-fit:cover; }
+    .scan-result{
+      margin-top:12px; padding:12px; border-radius:12px;
+      background:var(--halo-3); border:1px solid var(--accent-3);
+      font-family:var(--mono); font-size:12px; word-break:break-all;
+      color:var(--ink);
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>Motion QR Studio</h1>
+        <div class="subtitle">Generate QR codes for text, files, images, contacts, and Wi-Fi — with real expiry enforced by AWS. Encrypted in transit, deleted on schedule.</div>
+      </div>
+      <div class="row">
+        <span class="pill" id="api-pill" data-tone="warn">API: connecting…</span>
+        <span class="pill" id="capacity">Engine: qr-code-styling</span>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="tabs" id="tabs">
+        <button class="tab" data-tab="text" data-active="true">Text</button>
+        <button class="tab" data-tab="file">File</button>
+        <button class="tab" data-tab="image">Image</button>
+        <button class="tab" data-tab="smart">Smart</button>
+        <button class="tab" data-tab="scan">Scan</button>
+      </div>
+
+      <div class="content grid">
+        <!-- LEFT: tab content -->
+        <div>
+          <!-- TEXT -->
+          <div class="card" id="pane-text">
+            <div class="label">Text content</div>
+            <textarea id="text-input" placeholder="Type or paste text, a URL, anything. Stored on the server with your chosen expiry."></textarea>
+            <div class="status" id="text-status"></div>
+          </div>
+
+          <!-- FILE -->
+          <div class="card" id="pane-file" hidden>
+            <div class="label">File</div>
+            <div class="dropzone" id="file-drop">Drop a file here, or click to choose. Max <span id="max-mb">25</span> MB.</div>
+            <input type="file" id="file-input" hidden />
+            <div class="status" id="file-status"></div>
+            <div class="progress" id="file-progress" hidden><div class="progress-bar" id="file-progress-bar"></div></div>
+          </div>
+
+          <!-- IMAGE -->
+          <div class="card" id="pane-image" hidden>
+            <div class="label">Image</div>
+            <div class="dropzone" id="image-drop">Drop an image here, or click to choose.</div>
+            <input type="file" id="image-input" accept="image/*" hidden />
+            <div class="status" id="image-status"></div>
+            <div class="progress" id="image-progress" hidden><div class="progress-bar" id="image-progress-bar"></div></div>
+          </div>
+
+          <!-- SMART -->
+          <div class="card" id="pane-smart" hidden>
+            <div class="label">Smart payload</div>
+            <div class="hint" style="margin-bottom:10px;">Native QR formats — recognized directly by phones. These don't expire (the QR <em>is</em> the data).</div>
+            <select id="smart-type">
+              <option value="url">URL</option>
+              <option value="wifi">Wi-Fi credentials</option>
+              <option value="email">Email</option>
+              <option value="sms">SMS</option>
+              <option value="vcard">vCard contact</option>
+              <option value="geo">Geo location</option>
+            </select>
+            <div id="smart-fields" style="margin-top:12px;"></div>
+            <div class="status" id="smart-status"></div>
+          </div>
+
+          <!-- SCAN -->
+          <div class="card" id="pane-scan" hidden>
+            <div class="label">Scan a QR</div>
+            <div id="scan-https-warning" class="hint" hidden style="margin-bottom:10px; padding:10px; border-radius:10px; background:rgba(255,200,100,.08); border:1px solid rgba(255,200,100,.3); color:#ffd58a;">
+              ⚠ Camera scanning requires <strong>HTTPS</strong> or <strong>localhost</strong>. Your current page is on <code id="scan-origin" style="font-family:var(--mono);"></code>. Use the image-upload option below, or run the frontend locally with <code style="font-family:var(--mono);">python3 -m http.server</code>, or front your S3 site with CloudFront for HTTPS.
+            </div>
+            <div class="hint" style="margin-bottom:10px;">Point your camera at any QR code, or upload an image of one.</div>
+            <div id="scan-region"></div>
+            <div class="row" style="margin-top:10px; flex-wrap:wrap;">
+              <button id="scan-start" class="btn-primary">Start camera</button>
+              <button id="scan-stop" disabled>Stop</button>
+              <button id="scan-image-btn">Upload image</button>
+              <input type="file" id="scan-image-input" accept="image/*" hidden />
+            </div>
+            <div class="status" id="scan-status"></div>
+            <div id="scan-result" class="scan-result" hidden></div>
+          </div>
+
+          <!-- EXPIRY (shared across server-stored tabs) -->
+          <div class="card" id="ttl-card" style="margin-top:12px;">
+            <div class="label">Expiry</div>
+            <div class="ttl-row" id="ttl-row"></div>
+            <div class="row" style="margin-top:10px; align-items:flex-end;">
+              <div style="flex:1; min-width:120px;">
+                <label class="field-label">Custom value</label>
+                <input type="number" id="ttl-custom" min="1" placeholder="e.g. 30" />
+              </div>
+              <div style="flex:1; min-width:120px;">
+                <label class="field-label">Unit</label>
+                <select id="ttl-unit">
+                  <option value="60">minutes</option>
+                  <option value="3600" selected>hours</option>
+                  <option value="86400">days</option>
+                </select>
+              </div>
+            </div>
+            <div class="hint" style="margin-top:8px;">Files are hard-deleted from S3 once expired. Range: 1 minute to 7 days.</div>
+          </div>
+
+          <div class="row" style="margin-top:12px;">
+            <button class="btn-primary" id="generate-btn">Generate QR</button>
+            <button id="reset-btn">Reset</button>
+          </div>
+        </div>
+
+        <!-- RIGHT: preview + style customization -->
+        <div class="card preview" id="preview">
+          <div class="label">Preview</div>
+          <div class="qr-shell">
+            <div class="scanline"></div>
+            <div id="qr-target" class="empty"></div>
+          </div>
+          <div class="countdown" id="countdown" hidden>—</div>
+          <div class="meta" id="meta">Configure inputs and hit Generate.</div>
+          <div class="toolbar">
+            <button id="btn-copy" disabled>Copy PNG</button>
+            <button id="btn-download-png" disabled>PNG</button>
+            <button id="btn-download-svg" disabled>SVG</button>
+            <button id="btn-share-link" disabled>Share link</button>
+            <button id="btn-scan-safe">Scan Safe</button>
+            <button id="btn-theme-toggle" title="Switch theme">☀️</button>
+          </div>
+
+          <!-- Styling controls -->
+          <div class="card style-card" style="width:100%; margin-top:8px; padding:0; background:transparent; border:none;">
+            <details>
+              <summary>Style — dot shape, color, logo</summary>
+              <div style="margin-top:10px;">
+                <label class="field-label">Dot style</label>
+                <div class="style-grid" id="dot-style-grid">
+                  <label><input type="radio" name="dotStyle" value="square"><span>Square</span></label>
+                  <label><input type="radio" name="dotStyle" value="dots"><span>Dots</span></label>
+                  <label><input type="radio" name="dotStyle" value="rounded" checked><span>Rounded</span></label>
+                  <label><input type="radio" name="dotStyle" value="classy"><span>Classy</span></label>
+                  <label><input type="radio" name="dotStyle" value="classy-rounded"><span>Classy R.</span></label>
+                  <label><input type="radio" name="dotStyle" value="extra-rounded"><span>Extra R.</span></label>
+                </div>
+              </div>
+              <div style="margin-top:12px;">
+                <label class="field-label">Color preset</label>
+                <div class="swatches" id="swatches"></div>
+              </div>
+              <div style="margin-top:12px;">
+                <label class="field-label">Error correction</label>
+                <select id="ec-level">
+                  <option value="L">L — 7% recovery (max capacity)</option>
+                  <option value="M" selected>M — 15% recovery (balanced)</option>
+                  <option value="Q">Q — 25% recovery</option>
+                  <option value="H">H — 30% recovery (best for logos)</option>
+                </select>
+              </div>
+              <div style="margin-top:12px;">
+                <label class="field-label">Embedded logo (optional)</label>
+                <input type="file" id="logo-input" accept="image/*" />
+                <button id="logo-clear" style="margin-top:6px;" hidden>Remove logo</button>
+              </div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script src="./config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qr-code-styling@1.9.2/lib/qr-code-styling.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <script>
+  // ─── Theme System ──────────────────────────────────────
+  (function initTheme() {
+    const savedTheme = localStorage.getItem('motion-qr-theme') || 'dark';
+    const isDark = savedTheme !== 'light';
+    document.documentElement.dataset.theme = isDark ? '' : 'light';
+    updateThemeButton(savedTheme);
+    
+    // Set initial palette colors based on theme
+    window.__initialTheme = {
+      isDark,
+      palette: isDark 
+        ? { name: "spectrum", dots: { type: "linear-gradient", colorStops: [{ offset: 0, color: "#22D3EE" }, { offset: 1, color: "#F472B6" }] }, bg: "#0B0B14" }
+        : { name: "spectrum", dots: { type: "linear-gradient", colorStops: [{ offset: 0, color: "#0F766E" }, { offset: 1, color: "#E07856" }] }, bg: "#FAF6EE" }
+    };
+  })();
+
+  function toggleTheme() {
+    const current = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+    const next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next === 'light' ? 'light' : '';
+    localStorage.setItem('motion-qr-theme', next);
+    updateThemeButton(next);
+    
+    // Update meta theme-color for browser chrome
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) metaTheme.content = next === 'dark' ? '#0B0B14' : '#FAF6EE';
+    
+    // Re-render QR with new theme colors if one exists
+    if (state.qr) {
+      const isDark = next === 'dark';
+      updateQRColors(isDark);
+    }
+  }
+
+  function updateThemeButton(theme) {
+    const btn = document.getElementById('btn-theme-toggle');
+    if (btn) {
+      btn.textContent = theme === 'dark' ? '☀' : '☾';
+      btn.title = theme === 'dark' ? 'Switch to California beach' : 'Switch to NYC night';
+    }
+  }
+
+  function updateQRColors(isDark) {
+    // Update the QR to use theme-appropriate colors
+    const currentPalette = state.palette;
+    if (currentPalette.name === 'spectrum') {
+      const newDots = isDark 
+        ? { type: "linear-gradient", colorStops: [{ offset: 0, color: "#22D3EE" }, { offset: 1, color: "#F472B6" }] }
+        : { type: "linear-gradient", colorStops: [{ offset: 0, color: "#0F766E" }, { offset: 1, color: "#E07856" }] };
+      const newBg = isDark ? "#0B0B14" : "#FAF6EE";
+      state.palette = { ...currentPalette, dots: newDots, bg: newBg };
+      renderQR(state.lastShareUrl || "https://motion-qr.studio");
+    }
+  }
+
+  // ─── State ──────────────────────────────────────────
+  const cfg = window.MOTION_QR_CONFIG || {};
+  const API = (cfg.apiBase || "").replace(/\/$/, "");
+  const VIEWER_BASE = cfg.viewerBase || (location.origin + location.pathname.replace(/[^/]*$/, ""));
+  const TTL_PRESETS = cfg.ttlPresets || [
+    { label: "5 min", seconds: 300 }, { label: "1 hour", seconds: 3600 },
+    { label: "1 day", seconds: 86400 }, { label: "7 days", seconds: 604800 },
+  ];
+  document.getElementById("max-mb").textContent = cfg.maxFileSizeMB || 25;
+
+  const state = {
+    activeTab: "text",
+    ttlSeconds: 3600,
+    ttlPresetIndex: 1,
+    customTtl: false,
+    dotStyle: "rounded",
+    palette: window.__initialTheme?.palette || { name: "spectrum", dots: { type: "linear-gradient", colorStops: [{ offset: 0, color: "#7bd0ff" }, { offset: 1, color: "#ff9dd9" }] }, bg: "#0d0f14" },
+    ecLevel: "M",
+    logoDataUrl: null,
+    qr: null,           // QRCodeStyling instance
+    expiresAt: null,    // unix seconds
+    countdownTimer: null,
+    lastShareUrl: null,
+    scanner: null,
+  };
+
+  const palettes = [
+    { name:"spectrum",  dots:{type:"linear-gradient", colorStops:[{offset:0,color:"#22D3EE"},{offset:1,color:"#F472B6"}]}, bg:"#0B0B14", swatch:"linear-gradient(135deg,#22D3EE,#F472B6)" },
+    { name:"mono-dark", dots:"#0B0B14", bg:"#FAF6EE", swatch:"#0B0B14" },
+    { name:"mono-light",dots:"#FAF6EE", bg:"#0B0B14", swatch:"linear-gradient(135deg,#1F1A15,#FAF6EE)" },
+    { name:"emerald",   dots:{type:"linear-gradient", colorStops:[{offset:0,color:"#34D399"},{offset:1,color:"#0F766E"}]}, bg:"#0A1410", swatch:"linear-gradient(135deg,#34D399,#0F766E)" },
+    { name:"sunset",    dots:{type:"linear-gradient", colorStops:[{offset:0,color:"#FBBF24"},{offset:1,color:"#E07856"}]}, bg:"#1A0F0A", swatch:"linear-gradient(135deg,#FBBF24,#E07856)" },
+    { name:"deep-sea",  dots:{type:"linear-gradient", colorStops:[{offset:0,color:"#06B6D4"},{offset:1,color:"#1E40AF"}]}, bg:"#0A0F1F", swatch:"linear-gradient(135deg,#06B6D4,#1E40AF)" },
+  ];
+
+  // ─── Tab switching ──────────────────────────────────
+  const tabs = document.querySelectorAll(".tab");
+  const panes = ["text","file","image","smart","scan"].reduce((m,k)=>(m[k]=document.getElementById("pane-"+k),m), {});
+  const ttlCard = document.getElementById("ttl-card");
+  const generateBtn = document.getElementById("generate-btn");
+
+  tabs.forEach(t => t.addEventListener("click", () => {
+    tabs.forEach(x => x.dataset.active = "false");
+    t.dataset.active = "true";
+    state.activeTab = t.dataset.tab;
+    Object.values(panes).forEach(p => p.hidden = true);
+    panes[state.activeTab].hidden = false;
+
+    // TTL card and generate button only for server-stored kinds
+    const serverStored = ["text","file","image"].includes(state.activeTab);
+    ttlCard.style.display = serverStored || state.activeTab === "smart" ? "" : "none";
+    generateBtn.style.display = state.activeTab === "scan" ? "none" : "";
+    if (state.activeTab === "smart") {
+      ttlCard.style.display = "none"; // smart payloads don't expire
+    }
+  }));
+
+  // ─── TTL presets ────────────────────────────────────
+  const ttlRow = document.getElementById("ttl-row");
+  TTL_PRESETS.forEach((p, i) => {
+    const chip = document.createElement("button");
+    chip.className = "ttl-chip";
+    chip.textContent = p.label;
+    chip.dataset.active = i === 1 ? "true" : "false";
+    chip.addEventListener("click", () => {
+      state.ttlSeconds = p.seconds;
+      state.ttlPresetIndex = i;
+      state.customTtl = false;
+      Array.from(ttlRow.children).forEach((c, j) => c.dataset.active = j === i ? "true" : "false");
+      document.getElementById("ttl-custom").value = "";
+    });
+    ttlRow.appendChild(chip);
+  });
+  document.getElementById("ttl-custom").addEventListener("input", () => {
+    const v = parseInt(document.getElementById("ttl-custom").value, 10);
+    const u = parseInt(document.getElementById("ttl-unit").value, 10);
+    if (Number.isFinite(v) && v > 0) {
+      state.ttlSeconds = v * u;
+      state.customTtl = true;
+      Array.from(ttlRow.children).forEach(c => c.dataset.active = "false");
+    }
+  });
+  document.getElementById("ttl-unit").addEventListener("change", () => {
+    const v = parseInt(document.getElementById("ttl-custom").value, 10);
+    if (Number.isFinite(v) && v > 0) {
+      state.ttlSeconds = v * parseInt(document.getElementById("ttl-unit").value, 10);
+    }
+  });
+
+  // ─── Style: dot, palette, EC, logo ──────────────────
+  document.querySelectorAll('input[name="dotStyle"]').forEach(r => {
+    r.addEventListener("change", () => { state.dotStyle = r.value; if (state.qr) renderQR(state.lastShareUrl || ""); });
+  });
+  const swatchesEl = document.getElementById("swatches");
+  palettes.forEach((p, i) => {
+    const s = document.createElement("div");
+    s.className = "swatch";
+    s.style.background = p.swatch;
+    s.dataset.active = i === 0 ? "true" : "false";
+    s.title = p.name;
+    s.addEventListener("click", () => {
+      state.palette = p;
+      Array.from(swatchesEl.children).forEach((c, j) => c.dataset.active = j === i ? "true" : "false");
+      if (state.lastShareUrl) renderQR(state.lastShareUrl);
+    });
+    swatchesEl.appendChild(s);
+  });
+  document.getElementById("ec-level").addEventListener("change", e => {
+    state.ecLevel = e.target.value;
+    if (state.lastShareUrl) renderQR(state.lastShareUrl);
+  });
+  document.getElementById("logo-input").addEventListener("change", async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      state.logoDataUrl = reader.result;
+      document.getElementById("logo-clear").hidden = false;
+      if (state.lastShareUrl) renderQR(state.lastShareUrl);
+    };
+    reader.readAsDataURL(f);
+  });
+  document.getElementById("logo-clear").addEventListener("click", () => {
+    state.logoDataUrl = null;
+    document.getElementById("logo-input").value = "";
+    document.getElementById("logo-clear").hidden = true;
+    if (state.lastShareUrl) renderQR(state.lastShareUrl);
+  });
+
+  // ─── Smart payload form ─────────────────────────────
+  const smartFields = document.getElementById("smart-fields");
+  const smartType = document.getElementById("smart-type");
+  const smartTemplates = {
+    url:   [{ k:"url", label:"URL", type:"url", placeholder:"https://example.com" }],
+    wifi:  [
+      { k:"ssid", label:"Network name (SSID)", type:"text" },
+      { k:"password", label:"Password", type:"text" },
+      { k:"encryption", label:"Encryption", type:"select", options:[["WPA","WPA/WPA2"],["WEP","WEP"],["nopass","None"]] },
+      { k:"hidden", label:"Hidden network", type:"select", options:[["false","No"],["true","Yes"]] },
+    ],
+    email: [
+      { k:"to", label:"To", type:"email" },
+      { k:"subject", label:"Subject", type:"text" },
+      { k:"body", label:"Body", type:"text" },
+    ],
+    sms:   [
+      { k:"phone", label:"Phone", type:"tel" },
+      { k:"body", label:"Message", type:"text" },
+    ],
+    vcard: [
+      { k:"name", label:"Full name", type:"text" },
+      { k:"org", label:"Organization", type:"text" },
+      { k:"title", label:"Title", type:"text" },
+      { k:"phone", label:"Phone", type:"tel" },
+      { k:"email", label:"Email", type:"email" },
+      { k:"url", label:"Website", type:"url" },
+    ],
+    geo:   [
+      { k:"lat", label:"Latitude", type:"number" },
+      { k:"lng", label:"Longitude", type:"number" },
+    ],
+  };
+  function renderSmartFields() {
+    const tpl = smartTemplates[smartType.value];
+    smartFields.innerHTML = "";
+    tpl.forEach(f => {
+      const wrap = document.createElement("div");
+      wrap.className = "field";
+      const lab = document.createElement("label");
+      lab.className = "field-label"; lab.textContent = f.label;
+      wrap.appendChild(lab);
+      let input;
+      if (f.type === "select") {
+        input = document.createElement("select");
+        f.options.forEach(([v,l]) => { const o = document.createElement("option"); o.value=v; o.textContent=l; input.appendChild(o); });
+      } else {
+        input = document.createElement("input");
+        input.type = f.type;
+        if (f.placeholder) input.placeholder = f.placeholder;
+      }
+      input.id = "smart-" + f.k;
+      wrap.appendChild(input);
+      smartFields.appendChild(wrap);
+    });
+  }
+  smartType.addEventListener("change", renderSmartFields);
+  renderSmartFields();
+
+  function buildSmartPayload() {
+    const t = smartType.value;
+    const get = k => (document.getElementById("smart-"+k)||{}).value || "";
+    if (t === "url") return get("url");
+    if (t === "wifi") return `WIFI:T:${get("encryption")||"WPA"};S:${escapeWifi(get("ssid"))};P:${escapeWifi(get("password"))};${get("hidden")==="true"?"H:true;":""};`;
+    if (t === "email") {
+      const params = [];
+      if (get("subject")) params.push("subject="+encodeURIComponent(get("subject")));
+      if (get("body")) params.push("body="+encodeURIComponent(get("body")));
+      return `mailto:${get("to")}${params.length?"?"+params.join("&"):""}`;
+    }
+    if (t === "sms") return `sms:${get("phone")}${get("body")?"?body="+encodeURIComponent(get("body")):""}`;
+    if (t === "vcard") {
+      return [
+        "BEGIN:VCARD","VERSION:3.0",
+        get("name")?`FN:${get("name")}`:"",
+        get("org")?`ORG:${get("org")}`:"",
+        get("title")?`TITLE:${get("title")}`:"",
+        get("phone")?`TEL:${get("phone")}`:"",
+        get("email")?`EMAIL:${get("email")}`:"",
+        get("url")?`URL:${get("url")}`:"",
+        "END:VCARD"
+      ].filter(Boolean).join("\n");
+    }
+    if (t === "geo") return `geo:${get("lat")},${get("lng")}`;
+    return "";
+  }
+  function escapeWifi(s) { return String(s).replace(/([\\;,":])/g, "\\$1"); }
+
+  // ─── Dropzone wiring (file + image tabs) ───────────
+  function fmtBytes(b) {
+    if (b < 1024) return b + " B";
+    if (b < 1048576) return (b/1024).toFixed(1) + " KB";
+    return (b/1048576).toFixed(1) + " MB";
+  }
+
+  function setupDropzone(dropId, inputId, statusId, mustBeImage) {
+    const drop = document.getElementById(dropId);
+    const input = document.getElementById(inputId);
+
+    drop.addEventListener("click", () => input.click());
+    drop.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      drop.dataset.active = "true";
+    });
+    drop.addEventListener("dragleave", () => { drop.dataset.active = "false"; });
+    drop.addEventListener("drop", (e) => {
+      e.preventDefault();
+      drop.dataset.active = "false";
+      const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (!f) return;
+      try {
+        const dt = new DataTransfer();
+        dt.items.add(f);
+        input.files = dt.files;
+      } catch {
+        // Some older browsers don't allow setting input.files. The Generate button reads
+        // input.files[0], so as a fallback we stash the file on the input element directly.
+        input._droppedFile = f;
+      }
+      handlePicked();
+    });
+    input.addEventListener("change", handlePicked);
+
+    function handlePicked() {
+      const f = (input.files && input.files[0]) || input._droppedFile;
+      if (!f) return;
+      if (mustBeImage && !f.type.startsWith("image/")) {
+        setStatus(statusId, "Please pick an image file.", "err");
+        input.value = "";
+        return;
+      }
+      const maxBytes = (cfg.maxFileSizeMB || 25) * 1_000_000;
+      if (f.size > maxBytes) {
+        setStatus(statusId, `${f.name} is ${fmtBytes(f.size)} — exceeds ${cfg.maxFileSizeMB||25} MB limit.`, "err");
+        input.value = "";
+        return;
+      }
+      setStatus(statusId, `✓ ${f.name} · ${fmtBytes(f.size)} — ready. Click Generate QR.`, "ok");
+      drop.textContent = `${f.name} · ${fmtBytes(f.size)} (click to change)`;
+    }
+  }
+
+  setupDropzone("file-drop",  "file-input",  "file-status",  false);
+  setupDropzone("image-drop", "image-input", "image-status", true);
+
+  // ─── QR rendering ───────────────────────────────────
+  function renderQR(text) {
+    if (!text) {
+      document.getElementById("qr-target").classList.add("empty");
+      document.getElementById("qr-target").innerHTML = "";
+      return;
+    }
+    const target = document.getElementById("qr-target");
+    target.classList.remove("empty");
+    target.innerHTML = "";
+
+    const dots = state.palette.dots;
+    const dotsOptions = (typeof dots === "string")
+      ? { type: state.dotStyle, color: dots }
+      : { type: state.dotStyle, gradient: dots };
+
+    state.qr = new QRCodeStyling({
+      width: 280, height: 280, type: "svg", data: text,
+      qrOptions: { errorCorrectionLevel: state.ecLevel },
+      backgroundOptions: { color: state.palette.bg === "#ffffff" ? "#ffffff" : "#ffffff" }, // keep white background for scannability
+      dotsOptions,
+      cornersSquareOptions: { type: "extra-rounded", color: typeof dots === "string" ? dots : dots.colorStops[0].color },
+      cornersDotOptions: { color: typeof dots === "string" ? dots : dots.colorStops[1].color },
+      image: state.logoDataUrl || undefined,
+      imageOptions: { crossOrigin: "anonymous", margin: 6, imageSize: 0.32, hideBackgroundDots: true },
+    });
+    state.qr.append(target);
+  }
+
+  // ─── Countdown ──────────────────────────────────────
+  function setExpiry(unixSeconds) {
+    state.expiresAt = unixSeconds;
+    if (state.countdownTimer) clearInterval(state.countdownTimer);
+    const el = document.getElementById("countdown");
+    if (!unixSeconds) { el.hidden = true; return; }
+    el.hidden = false;
+    const tick = () => {
+      const remaining = unixSeconds - Math.floor(Date.now() / 1000);
+      if (remaining <= 0) {
+        el.textContent = "EXPIRED";
+        el.dataset.state = "expired";
+        clearInterval(state.countdownTimer);
+        return;
+      }
+      el.textContent = `expires in ${formatDuration(remaining)}`;
+      el.dataset.state = remaining < 300 ? "soon" : "ok";
+    };
+    tick();
+    state.countdownTimer = setInterval(tick, 1000);
+  }
+  function formatDuration(s) {
+    if (s < 60) return `${s}s`;
+    if (s < 3600) return `${Math.floor(s/60)}m ${s%60}s`;
+    if (s < 86400) return `${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m`;
+    return `${Math.floor(s/86400)}d ${Math.floor((s%86400)/3600)}h`;
+  }
+
+  // ─── Status helpers ─────────────────────────────────
+  function setStatus(id, text, tone) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.dataset.tone = tone || "";
+  }
+  function setMeta(text) { document.getElementById("meta").textContent = text; }
+  function enableActions(enabled, shareUrl) {
+    ["btn-copy","btn-download-png","btn-download-svg","btn-share-link"].forEach(id => {
+      document.getElementById(id).disabled = !enabled;
+    });
+    state.lastShareUrl = enabled ? shareUrl : null;
+  }
+
+  // ─── API calls ──────────────────────────────────────
+  async function apiCreate(payload) {
+    if (!API || API.includes("REPLACE_WITH")) {
+      throw new Error("API not configured. Edit config.js with your deployed API URL.");
+    }
+    const res = await fetch(API + "/uploads", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(()=>({error:"Request failed"}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  }
+  async function uploadToS3(url, file, onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", url);
+      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+      xhr.upload.addEventListener("progress", e => {
+        if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
+      });
+      xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`Upload failed: ${xhr.status}`));
+      xhr.onerror = () => reject(new Error("Network error during upload"));
+      xhr.send(file);
+    });
+  }
+
+  // ─── Generate button ────────────────────────────────
+  generateBtn.addEventListener("click", async () => {
+    try {
+      generateBtn.disabled = true;
+      enableActions(false);
+
+      if (state.activeTab === "text") {
+        const text = document.getElementById("text-input").value.trim();
+        if (!text) { setStatus("text-status", "Add some text first.", "err"); return; }
+        setStatus("text-status", "Storing on server…");
+        const r = await apiCreate({ kind: "text", text, ttlSeconds: state.ttlSeconds });
+        const url = VIEWER_BASE + "viewer.html?id=" + r.id;
+        renderQR(url);
+        setExpiry(r.expiresAt);
+        setMeta(url);
+        enableActions(true, url);
+        setStatus("text-status", "Stored. QR points to expiring viewer.", "ok");
+      }
+
+      else if (state.activeTab === "file" || state.activeTab === "image") {
+        const isImg = state.activeTab === "image";
+        const fileInputId = isImg ? "image-input" : "file-input";
+        const statusId = isImg ? "image-status" : "file-status";
+        const progressId = isImg ? "image-progress" : "file-progress";
+        const barId = isImg ? "image-progress-bar" : "file-progress-bar";
+        const file = document.getElementById(fileInputId).files[0];
+        if (!file) { setStatus(statusId, "Pick a file first.", "err"); return; }
+        const maxBytes = (cfg.maxFileSizeMB || 25) * 1_000_000;
+        if (file.size > maxBytes) { setStatus(statusId, `File exceeds ${cfg.maxFileSizeMB||25} MB limit.`, "err"); return; }
+
+        setStatus(statusId, "Requesting upload URL…");
+        const r = await apiCreate({
+          kind: isImg ? "image" : "file",
+          contentType: file.type || "application/octet-stream",
+          fileName: file.name,
+          sizeBytes: file.size,
+          ttlSeconds: state.ttlSeconds,
+        });
+
+        document.getElementById(progressId).hidden = false;
+        setStatus(statusId, "Uploading to S3…");
+        await uploadToS3(r.uploadUrl, file, (frac) => {
+          document.getElementById(barId).style.width = Math.round(frac * 100) + "%";
+        });
+        document.getElementById(progressId).hidden = true;
+
+        const url = VIEWER_BASE + "viewer.html?id=" + r.id;
+        renderQR(url);
+        setExpiry(r.expiresAt);
+        setMeta(url);
+        enableActions(true, url);
+        setStatus(statusId, "Uploaded. QR ready.", "ok");
+      }
+
+      else if (state.activeTab === "smart") {
+        const payload = buildSmartPayload();
+        if (!payload) { setStatus("smart-status", "Fill in the fields.", "err"); return; }
+        renderQR(payload);
+        setExpiry(null);
+        setMeta(payload.length > 200 ? payload.slice(0,200) + "…" : payload);
+        enableActions(true, payload);
+        setStatus("smart-status", "Ready. This QR contains the data directly.", "ok");
+      }
+    } catch (e) {
+      console.error(e);
+      const id = state.activeTab + "-status";
+      setStatus(id, e.message || "Something went wrong.", "err");
+    } finally {
+      generateBtn.disabled = false;
+    }
+  });
+
+  // ─── Reset ──────────────────────────────────────────
+  document.getElementById("reset-btn").addEventListener("click", () => {
+    document.getElementById("text-input").value = "";
+    document.getElementById("file-input").value = "";
+    document.getElementById("image-input").value = "";
+    smartFields.querySelectorAll("input,select").forEach(el => el.value = "");
+    renderQR("");
+    setExpiry(null);
+    setMeta("Configure inputs and hit Generate.");
+    enableActions(false);
+    ["text-status","file-status","image-status","smart-status","scan-status"].forEach(id => setStatus(id, ""));
+  });
+
+  // ─── Action buttons ─────────────────────────────────
+  document.getElementById("btn-download-svg").addEventListener("click", () => {
+    if (state.qr) state.qr.download({ name: "qr-code", extension: "svg" });
+  });
+  document.getElementById("btn-download-png").addEventListener("click", () => {
+    if (state.qr) state.qr.download({ name: "qr-code", extension: "png" });
+  });
+  document.getElementById("btn-copy").addEventListener("click", async () => {
+    if (!state.qr) return;
+    try {
+      const blob = await state.qr.getRawData("png");
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      setMeta("Copied PNG to clipboard.");
+    } catch (e) {
+      setMeta("Copy failed — try Download instead.");
+    }
+  });
+  document.getElementById("btn-share-link").addEventListener("click", async () => {
+    if (!state.lastShareUrl) return;
+    try {
+      await navigator.clipboard.writeText(state.lastShareUrl);
+      setMeta("Link copied: " + state.lastShareUrl);
+    } catch {
+      setMeta(state.lastShareUrl);
+    }
+  });
+  let scanSafe = false;
+  document.getElementById("btn-scan-safe").addEventListener("click", () => {
+    scanSafe = !scanSafe;
+    document.body.classList.toggle("scan-safe", scanSafe);
+    document.getElementById("btn-scan-safe").textContent = scanSafe ? "Scan Safe: On" : "Scan Safe";
+  });
+
+  // Theme toggle
+  document.getElementById("btn-theme-toggle").addEventListener("click", toggleTheme);
+
+  // ─── Scanner ────────────────────────────────────────
+  // Show HTTPS warning if camera will be blocked
+  (function setupScanWarning() {
+    const isSecure = window.isSecureContext;
+    if (!isSecure) {
+      document.getElementById("scan-https-warning").hidden = false;
+      document.getElementById("scan-origin").textContent = location.origin || "(unknown)";
+    }
+  })();
+
+  function handleDecoded(decoded) {
+    const resultEl = document.getElementById("scan-result");
+    resultEl.hidden = false;
+    resultEl.textContent = decoded;
+    if (/viewer\.html\?id=[0-9a-f-]{36}/.test(decoded)) {
+      setStatus("scan-status", "Viewer link detected — click result to open.", "ok");
+      resultEl.style.cursor = "pointer";
+      resultEl.onclick = () => window.open(decoded, "_blank");
+    } else if (/^https?:\/\//.test(decoded)) {
+      setStatus("scan-status", "URL decoded — click result to open.", "ok");
+      resultEl.style.cursor = "pointer";
+      resultEl.onclick = () => window.open(decoded, "_blank");
+    } else {
+      setStatus("scan-status", "Decoded.", "ok");
+    }
+  }
+
+  async function tryCameraConfig(scanner, config, qrConfig) {
+    return scanner.start(config, qrConfig, handleDecoded, () => {});
+  }
+
+  // Minimal, broadly-compatible scanner config.
+  // Avoids: experimental BarcodeDetector (breaks on iOS Safari), explicit resolution
+  // constraints (fail on lower-end phones), aspectRatio (causes black bars sometimes).
+  function buildScannerConfig() {
+    return {
+      fps: 10,
+      qrbox: (viewW, viewH) => {
+        const minEdge = Math.min(viewW, viewH);
+        const size = Math.max(200, Math.floor(minEdge * 0.7));
+        return { width: size, height: size };
+      },
+    };
+  }
+
+  document.getElementById("scan-start").addEventListener("click", async () => {
+    if (!window.isSecureContext) {
+      setStatus("scan-status", "Camera blocked: page must be served over HTTPS or from localhost. Use the Upload image option instead.", "err");
+      return;
+    }
+    if (typeof Html5Qrcode === "undefined") {
+      setStatus("scan-status", "Scanner library failed to load. Check your network and refresh.", "err");
+      return;
+    }
+    try {
+      if (!state.scanner) state.scanner = new Html5Qrcode("scan-region");
+      const qrCfg = buildScannerConfig();
+      // Try back camera first (mobile), then any user-facing, then enumerate.
+      let started = false;
+      try {
+        await tryCameraConfig(state.scanner, { facingMode: "environment" }, qrCfg);
+        started = true;
+      } catch (envErr) {
+        console.warn("environment camera failed:", envErr);
+      }
+      if (!started) {
+        try {
+          await tryCameraConfig(state.scanner, { facingMode: "user" }, qrCfg);
+          started = true;
+        } catch (userErr) {
+          console.warn("user camera failed:", userErr);
+        }
+      }
+      if (!started) {
+        const cams = await Html5Qrcode.getCameras();
+        if (!cams || cams.length === 0) throw new Error("No camera detected on this device.");
+        await tryCameraConfig(state.scanner, cams[0].id, qrCfg);
+      }
+      document.getElementById("scan-start").disabled = true;
+      document.getElementById("scan-stop").disabled = false;
+      setStatus("scan-status", "Camera live. Move the QR closer until it fills the inner square.", "ok");
+    } catch (e) {
+      console.error("Scanner error:", e);
+      let msg = e.message || String(e);
+      if (msg.includes("Permission") || msg.includes("NotAllowed")) msg = "Camera permission denied. In your browser settings, allow camera for this site, then retry.";
+      else if (msg.includes("NotFound") || msg.includes("No camera")) msg = "No camera found. Use Upload image instead.";
+      else if (msg.includes("NotReadable")) msg = "Camera busy (another app may be using it). Close other apps and retry.";
+      else if (msg.includes("OverconstrainedError")) msg = "This camera doesn't support the required settings. Try Upload image.";
+      setStatus("scan-status", "Camera error: " + msg, "err");
+    }
+  });
+  document.getElementById("scan-stop").addEventListener("click", async () => {
+    if (state.scanner) {
+      try { await state.scanner.stop(); } catch {}
+    }
+    document.getElementById("scan-start").disabled = false;
+    document.getElementById("scan-stop").disabled = true;
+    setStatus("scan-status", "Stopped.");
+  });
+
+  // Image-upload-to-scan: works without HTTPS, without a camera
+  document.getElementById("scan-image-btn").addEventListener("click", () => {
+    document.getElementById("scan-image-input").click();
+  });
+  document.getElementById("scan-image-input").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (typeof Html5Qrcode === "undefined") {
+      setStatus("scan-status", "Scanner library failed to load. Check network and refresh.", "err");
+      return;
+    }
+    try {
+      if (!state.scanner) state.scanner = new Html5Qrcode("scan-region");
+      // If a camera scan is running, stop it first
+      try { await state.scanner.stop(); } catch {}
+      setStatus("scan-status", "Decoding image…");
+      const decoded = await state.scanner.scanFile(file, /* showImage */ true);
+      handleDecoded(decoded);
+    } catch (err) {
+      setStatus("scan-status", "No QR found in that image. Try a clearer photo.", "err");
+    } finally {
+      e.target.value = ""; // allow re-upload of same file
+    }
+  });
+
+  // ─── Health check ───────────────────────────────────
+  (async () => {
+    const pill = document.getElementById("api-pill");
+    if (!API || API.includes("REPLACE_WITH")) {
+      pill.textContent = "API: not configured";
+      pill.dataset.tone = "err";
+      return;
+    }
+    try {
+      // Hit a non-existent ID; we expect a 404, which proves the API is reachable
+      const probe = await fetch(API + "/uploads/00000000-0000-0000-0000-000000000000");
+      if (probe.status === 404 || probe.status === 400) {
+        pill.textContent = "API: connected";
+        pill.dataset.tone = "ok";
+      } else {
+        pill.textContent = "API: status " + probe.status;
+        pill.dataset.tone = "warn";
+      }
+    } catch {
+      pill.textContent = "API: unreachable";
+      pill.dataset.tone = "err";
+    }
+  })();
+  </script>
+</body>
+</html>
