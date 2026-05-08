@@ -1,209 +1,207 @@
+<div align="center">
+
 # Motion QR Studio
 
-Ephemeral QR-code sharing. Drop a file, image, or text in. Get a QR. Set an expiry from 1 minute to 7 days. When the timer hits zero, S3 hard-deletes the object and DynamoDB drops the record. The QR becomes a tombstone.
+### Ephemeral file sharing via QR codes — upload anything, set an expiry, share the QR. Content self-deletes when the timer hits zero.
 
-Built as a static frontend + serverless AWS backend. Free-tier-friendly for personal use.
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Visit_Site-22D3EE?style=for-the-badge&logo=amazonaws&logoColor=white)](https://d39nzea71wo364.cloudfront.net/)
+[![License](https://img.shields.io/badge/License-MIT-F472B6?style=for-the-badge)](LICENSE)
+
+[![AWS Lambda](https://img.shields.io/badge/AWS_Lambda-FF9900?style=flat-square&logo=awslambda&logoColor=white)](https://aws.amazon.com/lambda/)
+[![Amazon DynamoDB](https://img.shields.io/badge/DynamoDB-4053D6?style=flat-square&logo=amazondynamodb&logoColor=white)](https://aws.amazon.com/dynamodb/)
+[![Amazon S3](https://img.shields.io/badge/Amazon_S3-569A31?style=flat-square&logo=amazons3&logoColor=white)](https://aws.amazon.com/s3/)
+[![API Gateway](https://img.shields.io/badge/API_Gateway-FF4F8B?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com/api-gateway/)
+[![CloudFront](https://img.shields.io/badge/CloudFront-8C4FFF?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com/cloudfront/)
+[![Node.js](https://img.shields.io/badge/Node.js_20-339933?style=flat-square&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![AWS SAM](https://img.shields.io/badge/AWS_SAM-IaC-232F3E?style=flat-square&logo=amazonaws&logoColor=white)](https://aws.amazon.com/serverless/sam/)
+
+</div>
+
+---
+
+## What it does
+
+You generate a QR code for text, a file, an image, or smart payloads (URLs, Wi-Fi credentials, vCards, geolocation). You set how long it lives — anywhere from 1 minute to 7 days. You share the QR. When someone scans it within the window, they see the content. After the window, the content is gone — enforced at three layers, with no recovery.
+
+It's the kind of thing you'd use to share a doc with someone in a meeting room, drop a Wi-Fi password to a guest, or beam a photo across the table without iCloud, AirDrop, or a chat app.
+
+## Why this exists
+
+Started as a 2 KB-limited client-side QR generator. Shipped as a serverless cloud platform supporting 25 MB files with real expiry semantics. The interesting engineering work was figuring out how to enforce "the content is actually gone" with strong guarantees, while keeping the system free to run at personal scale.
 
 ## Architecture
 
 ```
-┌──────────────────┐                                    ┌──────────────────┐
-│   Browser (S3    │  POST /uploads (metadata)          │  API Gateway     │
-│   static site)   │ ─────────────────────────────────► │  HTTP API        │
-│                  │ ◄───────── { uploadUrl } ───────── │                  │
-│  index.html      │                                    └────────┬─────────┘
-│  viewer.html     │                                             │
-│  config.js       │  PUT file (presigned)                       ▼
-└────────┬─────────┘ ──────────────────────►  ┌────────────┐  ┌──────────┐
-         │                                    │ S3 uploads │  │  Lambda  │
-         │            QR scanned              │ (lifecycle │  │  (Node)  │
-         │            → viewer.html?id=...    │   8d max)  │  └────┬─────┘
-         │                                    └────────────┘       │
-         │  GET /uploads/{id}                                       ▼
-         └─────────────────────────────────►  ┌──────────────────────────┐
-                                              │  DynamoDB (TTL=expiresAt)│
-                                              └──────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                          User's Browser                          │
+│  [Generator Page]                              [Viewer Page]     │
+└───┬──────────────────────────────────────────────┬───────────────┘
+    │                                              │
+    │                  ┌─────────────────────┐     │
+    │                  │     CloudFront      │     │
+    │                  │   (HTTPS + CDN)     │     │
+    │                  └──────────┬──────────┘     │
+    │                  ┌──────────▼──────────┐     │
+    │                  │   S3 (frontend)     │     │
+    │                  └─────────────────────┘     │
+    │                                              │
+    │  POST /uploads             GET /uploads/{id} │
+    └───────────┐                  ┌───────────────┘
+                ▼                  ▼
+         ┌────────────────────────────────┐
+         │     API Gateway (HTTP API)     │
+         │   CORS-locked + throttled      │
+         └──────┬──────────────────┬──────┘
+                │                  │
+       ┌────────▼─────┐    ┌───────▼──────┐
+       │   Lambda     │    │   Lambda     │
+       │ createUpload │    │  getUpload   │
+       └────┬─────┬───┘    └───┬──────┬───┘
+            │     │            │      │
+   ┌────────▼─┐  ┌▼────────────▼┐  ┌──▼─────────┐
+   │ S3       │  │  DynamoDB    │  │ S3         │
+   │ uploads  │  │ (TTL=expAt)  │  │ uploads    │
+   │ presign  │  │              │  │ presign    │
+   │ PUT      │  │              │  │ GET        │
+   └──────────┘  └──────────────┘  └────────────┘
 ```
 
-Two AWS-native expiry mechanisms run in parallel:
-- **DynamoDB TTL** wipes the metadata row at `expiresAt`. The viewer Lambda also re-checks and returns 410 if the row is past its time (since DDB's TTL sweep can lag up to 48h).
-- **S3 lifecycle** hard-deletes the object after 8 days regardless. This is the safety net — even if a record were orphaned, the bytes are gone.
+**Two design choices worth calling out:**
 
-## What's in the box
+1. **The browser uploads files directly to S3 via presigned URLs.** Lambda only generates permission tokens — it never sees file bytes. This bypasses Lambda's 6 MB request limit and keeps compute costs at near-zero regardless of file size.
 
-```
-motion-qr-studio/
-├── backend/
-│   ├── template.yaml            # AWS SAM (CloudFormation) — full infra
-│   └── src/
-│       ├── createUpload.mjs     # POST /uploads
-│       ├── getUpload.mjs        # GET /uploads/{id}
-│       └── package.json         # AWS SDK v3 deps
-├── frontend/
-│   ├── index.html               # Generator (text/file/image/smart/scan)
-│   ├── viewer.html              # Where scanned QRs land
-│   └── config.js                # Edit after deploy: paste your API URL
-└── README.md
-```
+2. **Three-layer expiry enforcement.** A frontend countdown for UX, a Lambda runtime check for security (the *real* boundary), and DynamoDB TTL + S3 lifecycle for cleanup. Each layer has a different reliability profile and a different role.
+
+
 
 ## Features
 
-- Five tabs: **Text**, **File**, **Image**, **Smart** (URL / Wi-Fi / vCard / Email / SMS / Geo), **Scan** (camera-based decoder)
-- Real expiry: 1 min to 7 days, presets + custom
-- Direct browser-to-S3 upload (presigned PUT) — Lambda never touches the bytes
-- Six dot styles, six color palettes (incl. gradient), embedded logo, four EC levels
-- PNG / SVG download, copy-to-clipboard, share-link
-- Live countdown on both generator and viewer
-- "Scan Safe" mode disables motion (helps stubborn camera scanners)
-- Built on `qr-code-styling` (engine) + `html5-qrcode` (scanner) — both via CDN, no build step
+| Feature | Detail |
+|---|---|
+| 🔗 **QR Generation** | Text, files (≤25 MB), images, URLs, Wi-Fi, vCards, email, SMS, geo |
+| ⏱️ **Configurable Expiry** | 1 min, 1 hr, 1 day, 7 days, or custom |
+| 📷 **Built-in Scanner** | Camera-based + image upload fallback for non-HTTPS contexts |
+| 🎨 **Custom Styling** | 6 dot shapes, gradient palettes, embedded logos, error correction levels |
+| 🌗 **Dark/Light Themes** | NYC Night (refined neon) + California Beach (coastal editorial) |
+| 🔒 **Secure by Default** | Presigned URLs, scoped IAM roles, CORS-locked, HTTPS-only |
+| 📱 **Mobile-Optimized** | Adaptive layouts, mobile camera scanner, fallback for older browsers |
+| 💰 **Free-Tier Friendly** | ~$0/month for personal use under AWS Free Tier |
 
----
+## Tech Stack
 
-## Prerequisites
+| Layer | Technology | Why |
+|---|---|---|
+| **Frontend** | Vanilla JS, HTML, CSS | No build step, three files, fully self-contained |
+| **QR Engine** | [qr-code-styling](https://github.com/kozakdenys/qr-code-styling) | Gradient + logo support, SVG/PNG output |
+| **Scanner** | [html5-qrcode](https://github.com/mebjas/html5-qrcode) | Camera + image-upload decoding |
+| **Compute** | AWS Lambda (Node.js 20, ARM64) | Pay-per-invocation, ~20% cheaper on Graviton |
+| **API** | API Gateway HTTP API | 70% cheaper than REST API, native CORS |
+| **Database** | DynamoDB (on-demand) | Native TTL feature, no capacity planning |
+| **Storage** | S3 (private uploads bucket) | Presigned URLs, lifecycle rules, SSE-S3 encryption |
+| **CDN/HTTPS** | CloudFront | HTTPS termination (required for camera APIs) |
+| **IaC** | AWS SAM | Single-file declarative infra, ~3-min deploys |
 
-- An AWS account
-- [AWS CLI](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) configured with credentials (`aws configure`)
-- [AWS SAM CLI](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/install-sam-cli.html)
-- Node.js 20+ (for the Lambda layer)
+## Project Structure
 
-## Deploy
+```
+motion-qr-studio/
+├── README.md                  ← you are here
+├── GETTING_STARTED.md         ← step-by-step deploy from zero
+├── PROJECT_JOURNAL.md         ← architecture deep-dive + debug journal
+├── .gitignore
+├── backend/
+│   ├── template.yaml          ← AWS SAM template (~160 lines of IaC)
+│   └── src/
+│       ├── createUpload.mjs   ← POST /uploads handler
+│       ├── getUpload.mjs      ← GET /uploads/{id} handler
+│       └── package.json
+└── frontend/
+    ├── index.html             ← generator + scanner UI
+    ├── viewer.html            ← receiver page (loads from QR)
+    └── config.js              ← API base URL, presets
+```
 
-### 1. Backend
+## Quick Deploy
+
+**Prerequisites:** AWS account, AWS CLI configured, AWS SAM CLI, Node.js 20+
 
 ```bash
+# Backend — provisions the entire AWS stack
 cd backend
 npm install --prefix src
 sam build
 sam deploy --guided
+# Note the ApiUrl from the outputs
+
+# Frontend — point at the API and ship to S3
+cd ../frontend
+# Edit config.js with the ApiUrl from above
+aws s3 mb s3://your-bucket-name
+aws s3 sync . s3://your-bucket-name/ --cache-control "public, max-age=300"
+
+# Then create a CloudFront distribution pointing at the S3 website endpoint
+# (HTTPS is required for the camera scanner to work)
 ```
 
-`--guided` is a one-time interactive wizard. Use these answers:
 
-| Prompt | Value |
-|---|---|
-| Stack Name | `motion-qr-studio` |
-| AWS Region | pick one near your users (e.g. `us-east-1`) |
-| Parameter `AppName` | `motion-qr-studio` |
-| Parameter `CorsOrigin` | `*` for now (lock down later — see Hardening) |
-| Parameter `MaxFileSizeMB` | `25` |
-| Parameter `HardDeleteDays` | `8` |
-| Confirm changes | `Y` |
-| Allow IAM role creation | `Y` |
-| Save arguments | `Y` (writes `samconfig.toml`) |
+## Engineering Highlights
 
-When it finishes, copy the `ApiUrl` from the **Outputs** section. Looks like:
+**Direct-to-S3 uploads via presigned URLs.** Lambda generates a SigV4-signed PUT URL with a 5-minute TTL bound to a specific bucket, key, content-type, and size. The browser uploads directly to S3. Compute costs stay flat regardless of file size.
 
-```
-https://abc123xyz.execute-api.us-east-1.amazonaws.com
-```
+**Three-layer expiry enforcement.** `expiresAt` is checked by Lambda on every read (the security boundary). DynamoDB TTL sweeps expired rows asynchronously (cleanup, not enforcement — TTL can lag up to 48 hours). S3 lifecycle hard-deletes files older than 8 days as the terminal backstop.
 
-### 2. Frontend config
+**Least-privilege IAM.** `createUpload` can only `PutItem` + `PutObject`. `getUpload` can only `GetItem` + `GetObject`. A bug in one function can't leak data from the other's domain.
 
-Edit `frontend/config.js`:
+**Cost-aware service selection.** ARM64 Graviton runtime, HTTP API Gateway over REST, on-demand DynamoDB billing, S3 lifecycle for hard cleanup. The whole system runs at ~$0/month under personal use.
 
-```js
-window.MOTION_QR_CONFIG = {
-  apiBase: "https://abc123xyz.execute-api.us-east-1.amazonaws.com",  // ← paste here
-  viewerBase: "",   // leave blank if frontend and viewer.html are on the same origin
-  ...
-};
-```
+**Reproducible infrastructure.** ~160 lines of declarative AWS SAM template defines every resource. `sam deploy` from a clean checkout rebuilds the entire backend in ~3 minutes.
 
-### 3. Frontend hosting on S3
+## Cost (real numbers)
 
-Pick a globally-unique bucket name (e.g. `motion-qr-yourname`).
+For personal use, this stack lives entirely within AWS Free Tier:
 
-```bash
-BUCKET=motion-qr-yourname
-REGION=us-east-1
+| Service | Free Tier | Personal Use |
+|---|---|---|
+| Lambda | 1M requests + 400K GB-seconds/month forever | <100 invocations/week |
+| DynamoDB | 25 GB + 25 RCU/WCU forever | <1 MB metadata |
+| API Gateway HTTP | 1M requests/month for 12 months | <500 requests/week |
+| S3 | 5 GB + 20K GET / 2K PUT for 12 months | <100 MB stored |
+| CloudFront | 1 TB transfer + 10M requests for 12 months | <1 GB transfer |
 
-aws s3api create-bucket --bucket $BUCKET --region $REGION \
-  --create-bucket-configuration LocationConstraint=$REGION
 
-aws s3 website s3://$BUCKET/ --index-document index.html
 
-# Allow public reads (this bucket only hosts static frontend)
-aws s3api put-public-access-block --bucket $BUCKET \
-  --public-access-block-configuration "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
+## Roadmap
 
-cat > /tmp/policy.json <<EOF
-{ "Version":"2012-10-17","Statement":[{"Sid":"PublicRead","Effect":"Allow","Principal":"*","Action":"s3:GetObject","Resource":"arn:aws:s3:::$BUCKET/*"}]}
-EOF
-aws s3api put-bucket-policy --bucket $BUCKET --policy file:///tmp/policy.json
+- [ ] Password-protected links (bcrypt hash in DynamoDB)
+- [ ] View-count limits (one-time-view mode)
+- [ ] Custom domain via Route 53 + ACM
+- [ ] Cleanup Lambda on EventBridge schedule (sub-minute deletion)
+- [ ] Cognito-based authentication for owner dashboard
+- [ ] Analytics table (anonymous scan tracking)
+- [ ] Content scanning Lambda (S3 PutObject trigger)
+- [ ] WebRTC peer-to-peer mode (no cloud storage option)
 
-aws s3 sync ./frontend s3://$BUCKET/ --delete --cache-control "public, max-age=300"
-```
 
-Your site is live at:
 
-```
-http://$BUCKET.s3-website-$REGION.amazonaws.com
-```
+## Author
 
-### 4. Test it
+**Achyuth Narayan Shanku**
+MS Information Systems · University of Cincinnati · Lindner College of Business
 
-Open the site, type some text in the Text tab, hit Generate. Scan the QR with your phone. You should land on the viewer page. Wait for the expiry, refresh — content should be gone.
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0A66C2?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/narayan-shanku/)
+[![GitHub](https://img.shields.io/badge/GitHub-@Narayan--shanku-181717?style=flat-square&logo=github&logoColor=white)](https://github.com/Narayan-shanku)
 
----
-
-## Local development
-
-The frontend is just static HTML — any file server works:
-
-```bash
-cd frontend
-python3 -m http.server 8000
-# visit http://localhost:8000
-```
-
-For local Lambda testing:
-
-```bash
-cd backend
-sam local start-api --port 3001
-```
-
-Then in `frontend/config.js`, point `apiBase` at `http://localhost:3001`.
-
----
-
-## Cost estimate (personal use)
-
-For ≤1,000 generations/month, ≤500 MB total uploaded, this runs **$0** on AWS free tier:
-- Lambda: 1M free requests/month forever
-- API Gateway HTTP API: 1M free requests for 12 months
-- DynamoDB: 25 GB + 25 RCU/WCU free forever
-- S3: 5 GB + 20K GET / 2K PUT free for 12 months
-
-Past the free tier, the heaviest cost is S3 storage (~$0.023/GB/month) and outbound bandwidth ($0.09/GB). Lifecycle deletes keep storage bounded.
-
----
-
-## Hardening checklist (when you're ready to ship for real)
-
-- [ ] **Lock CORS to your domain** — redeploy with `CorsOrigin=https://your-domain.com` instead of `*`. Both the API Gateway config and the S3 uploads bucket CORS rules pick this up.
-- [ ] **Custom domain + CloudFront** — front the S3 site with CloudFront, attach an ACM cert, point your domain at it. Same for the API.
-- [ ] **Authentication** — currently anonymous. For private use, put Cognito or a JWT authorizer in front of `POST /uploads`. Keep `GET /uploads/{id}` public (the UUID is the capability).
-- [ ] **Rate limiting** — already throttled to 20 req/s burst 50. Add WAF if you need IP-based rules or geo-blocking.
-- [ ] **Content scanning** — for fully public deployment, add a Lambda triggered on S3 PutObject that runs a virus/abuse scan and revokes the metadata row if it fails.
-- [ ] **Encryption at rest with KMS** — currently SSE-S3 (AWS-managed). Switch to SSE-KMS with a customer-managed key for compliance contexts.
-- [ ] **Audit logging** — enable CloudTrail data events on the uploads bucket; pipe API Gateway access logs to CloudWatch.
-- [ ] **Per-link password / view limit** — extend the metadata schema to include `password` (bcrypt) and `maxViews`, decrement on each `getUpload`.
-
----
-
-## How expiry actually works (in detail)
-
-Three layers, weakest to strongest:
-
-1. **Frontend countdown** (cosmetic). The browser reads `expiresAt` and ticks down. Trivially bypassed — don't trust this for security.
-2. **Lambda enforcement** (real). `getUpload` checks `expiresAt < now` on every read and returns 410 Gone. This is the boundary — past expiry, the API stops serving the content.
-3. **Auto-delete** (terminal). DynamoDB TTL sweeps the metadata row (within ~48h of `expiresAt`). S3 lifecycle hard-deletes the object after `HardDeleteDays`. Once both have run, the data is unrecoverable from the system.
-
-The window between "Lambda starts returning 410" and "data is physically gone" is up to 8 days, but during that window no API call can retrieve the content. If you need stricter physical deletion, add an EventBridge schedule that runs a cleanup Lambda hourly.
-
----
 
 ## License
 
-MIT — do whatever, no warranty.
+MIT — see [`LICENSE`](./LICENSE) for details. Free to fork, learn from, or build on.
+
+---
+
+<div align="center">
+
+**Built solo. Deployed on AWS. Documented thoroughly.**
+
+If this project taught you something or sparked an idea, ⭐ the repo.
+
+</div>
